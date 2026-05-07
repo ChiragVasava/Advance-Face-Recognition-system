@@ -296,7 +296,7 @@ def train_classifier():
 
                         try:
 
-                            conn = mysql.connector.connect(
+                            mydb = mysql.connector.connect(
                                 host="localhost",
                                 user="YOUR_USERNAME",
                                 password="YOUR_PASSWORD",
@@ -485,7 +485,7 @@ def detect_face():
 
                         try:
 
-                            conn = mysql.connector.connect(
+                            mydb = mysql.connector.connect(
                                 host="localhost",
                                 user="YOUR_USERNAME",
                                 password="YOUR_PASSWORD",
@@ -597,11 +597,11 @@ def generate_dataset():
 
     try:
 
-        mydb = mysql.connector.connect(
+        mydb =mysql.connector.connect(
             host="localhost",
-            user="root",
-            passwd="system",
-            database="Authorized_user"
+            user="YOUR_USERNAME",
+            password="YOUR_PASSWORD",
+            database="face_recognizer"
         )
 
         mycursor = mydb.cursor()
