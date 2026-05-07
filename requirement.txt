@@ -1,0 +1,5 @@
+
+mysql-connector-python==9.7.0
+numpy==2.2.3
+opencv-contrib-python==4.13.0.92
+pillow==12.2.0
