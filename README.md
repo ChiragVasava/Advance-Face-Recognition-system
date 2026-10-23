@@ -1,43 +1,90 @@
 # Face Recognition Website
 
-A browser dashboard for registering people, capturing face datasets, training the existing OpenCV LBPH recognizer, and displaying recognition results. Node.js serves the website and API, PostgreSQL stores user/event/sample metadata, and `GUI_Face_Recognition.py` runs the Haar + LBPH computer-vision logic.
+A browser dashboard for registering people, capturing training samples, training an OpenCV LBPH model, and recognizing faces with a confidence score.
+
+- Node.js serves the website and REST API.
+- Python (`GUI_Face_Recognition.py`) performs Haar face detection and LBPH training/recognition.
+- PostgreSQL stores users, face-sample metadata, and attendance logs.
+- Captured face photos stay on the machine that enrolled them. Only the trained `classifier.xml` is stored in Supabase Storage when configured.
 
 ## Requirements
 
-- Node.js 20+
-- Python 3.11+
-- PostgreSQL 16+ (local or Supabase)
-- A camera; browser camera access works on `localhost` or HTTPS
+- Node.js 20 or newer
+- Python 3.11
+- A Supabase project or another PostgreSQL database
+- A webcam; browser camera access is allowed on `localhost` or HTTPS
 
-## Run Locally
+You do not need Docker or a separate frontend server.
 
-1. From the repository root, create `backend/.env` from `backend/.env.example`. Set `DATABASE_URL`, `DIRECT_URL`, and `SUPABASE_SERVICE_ROLE_KEY` locally; never commit this file.
-2. Start the Node backend, which also serves the website, and create/update the PostgreSQL tables:
+## First-Time Setup
 
-   ```powershell
-   cd backend
-   npm install
-   npm run db:setup
-   npm run dev
-   ```
+Clone the GitHub repository and open a terminal in its root folder.
 
-3. In a second terminal opened at the repository root, install Python dependencies and start the recognition service. On Windows:
+### 1. Configure the backend environment
 
-   ```powershell
-   py -3.11 -m pip install -r requirements.txt
-   py -3.11 GUI_Face_Recognition.py
-   ```
+Create `backend/.env` from the example file.
 
-   On macOS or Linux:
+PowerShell:
 
-   ```sh
-   python3 -m pip install -r requirements.txt
-   python3 GUI_Face_Recognition.py
-   ```
+```powershell
+Copy-Item backend/.env.example backend/.env
+```
 
-4. Open `http://localhost:4000` in a browser. No separate frontend server is needed.
+macOS/Linux:
 
-Register a user, start the enrollment camera, and capture 100 samples. The browser sends compressed batches of ten frames. Select **Train Model** in the top bar. On the dashboard, start the recognition camera and select **Recognize** to see the predicted identity and LBPH confidence score.
+```sh
+cp backend/.env.example backend/.env
+```
+
+Edit `backend/.env` locally. Set `DATABASE_URL` and `DIRECT_URL` to your PostgreSQL connection strings. The example uses Supabase's transaction pooler for `DATABASE_URL` and session pooler for `DIRECT_URL`.
+
+Set `SUPABASE_SERVICE_ROLE_KEY` to your project's server-only secret key to share the trained classifier through Supabase Storage. Find it in the Supabase Dashboard under **Project Settings → API Keys**. Do not use the publishable/anon key, put this secret in frontend code, or commit `backend/.env`.
+
+If the database password contains reserved URL characters, URL-encode those characters in both connection strings.
+
+### 2. Install Node dependencies and initialize PostgreSQL
+
+From the repository root:
+
+```sh
+cd backend
+npm install
+npm run db:setup
+```
+
+Run `db:setup` once for a new database or after Prisma schema changes. Stop the backend before running it again; Windows can lock Prisma's generated engine while the server is using it.
+
+### 3. Start the backend and website
+
+In the same `backend` terminal:
+
+```sh
+npm run dev
+```
+
+This starts the Node API and serves the frontend at **http://localhost:4000**. There is no separate frontend command.
+
+### 4. Install and start the Python recognition service
+
+Open a second terminal at the repository root.
+
+Windows:
+
+```powershell
+py -3.11 -m pip install -r requirements.txt
+py -3.11 GUI_Face_Recognition.py
+```
+
+macOS/Linux:
+
+```sh
+python3 -m pip install -r requirements.txt
+python3 GUI_Face_Recognition.py
+```
+
+Keep both terminals running. Open `http://localhost:4000` in a browser.
+
+Register a user, start the enrollment camera, and capture 100 samples. The browser sends compressed batches of ten frames. Select **Train Model** in the top bar. The first training builds the classifier from active users; later training adds the selected user's samples without rereading older users' images. On the dashboard, start the recognition camera and select **Recognize** to see the predicted identity and LBPH confidence score.
 
 ## Shared Classifier Storage
 
