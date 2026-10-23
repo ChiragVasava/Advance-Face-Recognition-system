@@ -153,6 +153,23 @@ def capture_batch(body: CaptureBatchRequest) -> dict[str, object]:
     return {"success": True, "results": results}
 
 
+@app.post("/api/cv/detect")
+def detect(body: ImageRequest) -> dict[str, object]:
+    image = decode_image(body.image)
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    boxes = FACE_CASCADE.detectMultiScale(
+        gray, scaleFactor=1.1, minNeighbors=8, minSize=(100, 100)
+    )
+    return {
+        "width": int(gray.shape[1]),
+        "height": int(gray.shape[0]),
+        "faces": [
+            {"x": int(x), "y": int(y), "w": int(width), "h": int(height)}
+            for x, y, width, height in boxes
+        ],
+    }
+
+
 @app.post("/api/cv/train")
 def train(body: TrainRequest) -> dict[str, object]:
     if not body.samples:
@@ -166,8 +183,36 @@ def train(body: TrainRequest) -> dict[str, object]:
         faces.append(cv2.resize(gray, (200, 200)))
         labels.append(sample.user_id)
 
-    trained = cv2.face.LBPHFaceRecognizer_create()
-    trained.train(faces, np.asarray(labels, dtype=np.int32))
+    global recognizer
+    trained = recognizer
+    is_incremental = False
+    if trained is None and MODEL_PATH.exists():
+        trained = cv2.face.LBPHFaceRecognizer_create()
+        try:
+            trained.read(str(MODEL_PATH))
+        except cv2.error as exc:
+            raise HTTPException(status_code=500, detail="Classifier file is corrupted; train the model again") from exc
+
+    if trained is None:
+        trained = cv2.face.LBPHFaceRecognizer_create()
+        trained.train(faces, np.asarray(labels, dtype=np.int32))
+    else:
+        existing_labels = set(int(label) for label in trained.getLabels().flatten())
+        new_samples = [
+            (face, label)
+            for face, label in zip(faces, labels)
+            if label not in existing_labels
+        ]
+        if new_samples:
+            new_faces, new_labels = zip(*new_samples)
+            trained.update(list(new_faces), np.asarray(new_labels, dtype=np.int32))
+            faces = list(new_faces)
+            labels = list(new_labels)
+        else:
+            faces = []
+            labels = []
+        is_incremental = True
+
     MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     temporary_path = MODEL_PATH.with_suffix(".tmp.xml")
     trained.write(str(temporary_path))
@@ -176,12 +221,12 @@ def train(body: TrainRequest) -> dict[str, object]:
         raise HTTPException(status_code=500, detail="Classifier save failed")
     temporary_path.replace(MODEL_PATH)
 
-    global recognizer
     recognizer = trained
     return {
         "success": True,
         "samples_trained": len(faces),
         "users_trained": len(set(labels)),
+        "incremental": is_incremental,
     }
 
 

@@ -149,9 +149,41 @@ export const captureFaceSampleBatch = async (req: Request, res: Response): Promi
   });
 };
 
-export const trainFaceModel = async (_req: Request, res: Response): Promise<void> => {
+export const detectFace = async (req: Request, res: Response): Promise<void> => {
+  const { image } = req.body as { image: string };
+  if (typeof image !== "string") throw new AppError("A camera image is required", 400);
+  decodeIncomingImage(image);
+
+  const result = await callCvService<{
+    width: number;
+    height: number;
+    faces: Array<{ x: number; y: number; w: number; h: number }>;
+  }>("/api/cv/detect", { image });
+  res.status(200).json({ success: true, data: result });
+};
+
+export const trainFaceModel = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.body as { userId?: number };
+  if (userId !== undefined && (!Number.isInteger(userId) || userId < 1)) {
+    throw new AppError("userId must be a positive integer", 400);
+  }
+
+  let modelAvailable = false;
+  try {
+    const status = await axios.get<{ model_trained: boolean }>(`${CV_SERVICE_URL}/api/cv/health`, { timeout: 2500 });
+    modelAvailable = status.data.model_trained || await restoreClassifier();
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new AppError("Face recognition service is unavailable", 503);
+    }
+    throw error;
+  }
+
   const samples = await prisma.faceSample.findMany({
-    where: { user: { isActive: true } },
+    where: {
+      user: { isActive: true },
+      ...(modelAvailable && userId !== undefined ? { userId } : {}),
+    },
     select: { userId: true, storagePath: true },
     orderBy: { id: "asc" },
   });
@@ -165,7 +197,11 @@ export const trainFaceModel = async (_req: Request, res: Response): Promise<void
       image: (await readFaceImage(sample.storagePath)).toString("base64"),
     }))
   );
-  const result = await callCvService<{ samples_trained: number; users_trained: number }>(
+  const result = await callCvService<{
+    samples_trained: number;
+    users_trained: number;
+    incremental: boolean;
+  }>(
     "/api/cv/train",
     { samples: trainingSamples },
     120000

@@ -15,6 +15,8 @@ let enrollmentSamples = 0;
 let enrollmentStream = null;
 let recognitionStream = null;
 let isCapturingDataset = false;
+let enrollmentDetectionTimer = null;
+let enrollmentDetectionInFlight = false;
 
 // ── Clock ─────────────────────────────────────────────────────────
 
@@ -360,10 +362,104 @@ const frameAsJpeg = (video, canvas, quality = 0.82, maxWidth = 0) => {
   return canvas.toDataURL("image/jpeg", quality);
 };
 
+function clearEnrollmentOverlay() {
+  const overlay = document.getElementById("enrollment-overlay");
+  if (!overlay) return;
+  overlay.width = overlay.clientWidth;
+  overlay.height = overlay.clientHeight;
+  overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+}
+
+function drawEnrollmentFaces(faces, sourceWidth, sourceHeight) {
+  const overlay = document.getElementById("enrollment-overlay");
+  if (!overlay) return;
+  const width = overlay.clientWidth;
+  const height = overlay.clientHeight;
+  overlay.width = width;
+  overlay.height = height;
+  const context = overlay.getContext("2d");
+  context.clearRect(0, 0, width, height);
+  if (!sourceWidth || !sourceHeight) return;
+
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const offsetX = (width - sourceWidth * scale) / 2;
+  const offsetY = (height - sourceHeight * scale) / 2;
+  context.strokeStyle = "#39d98a";
+  context.lineWidth = 3;
+  faces.forEach(({ x, y, w, h }) => {
+    context.strokeRect(
+      offsetX + x * scale,
+      offsetY + y * scale,
+      w * scale,
+      h * scale
+    );
+  });
+}
+
+function drawRecognitionFaces(faces, sourceWidth, sourceHeight) {
+  const overlay = document.getElementById("recognition-overlay");
+  if (!overlay) return;
+  const width = overlay.clientWidth;
+  const height = overlay.clientHeight;
+  overlay.width = width;
+  overlay.height = height;
+  const context = overlay.getContext("2d");
+  context.clearRect(0, 0, width, height);
+  if (!sourceWidth || !sourceHeight) return;
+
+  const scale = Math.max(width / sourceWidth, height / sourceHeight);
+  const offsetX = (width - sourceWidth * scale) / 2;
+  const offsetY = (height - sourceHeight * scale) / 2;
+  faces.forEach((face) => {
+    const recognized = face.user != null;
+    const color = recognized ? "#39d98a" : "#ff5c5c";
+    const label = recognized ? face.user.name : "Unknown";
+    const x = offsetX + face.bbox.x * scale;
+    const y = offsetY + face.bbox.y * scale;
+    const boxWidth = face.bbox.w * scale;
+    const boxHeight = face.bbox.h * scale;
+    context.strokeStyle = color;
+    context.fillStyle = color;
+    context.lineWidth = 3;
+    context.strokeRect(x, y, boxWidth, boxHeight);
+    context.font = "600 14px sans-serif";
+    const textWidth = context.measureText(label).width;
+    context.fillRect(x, Math.max(0, y - 24), textWidth + 16, 24);
+    context.fillStyle = "#101619";
+    context.fillText(label, x + 8, Math.max(16, y - 7));
+  });
+}
+
+async function detectEnrollmentFace() {
+  if (!enrollmentStream || enrollmentDetectionInFlight) return;
+  enrollmentDetectionInFlight = true;
+  try {
+    const image = frameAsJpeg(
+      document.getElementById("enrollment-video"),
+      document.getElementById("enrollment-canvas"),
+      0.6,
+      480
+    );
+    const response = await apiFetch("/api/faces/detect", {
+      method: "POST",
+      body: JSON.stringify({ image }),
+    });
+    drawEnrollmentFaces(response.data.faces, response.data.width, response.data.height);
+  } catch {
+    clearEnrollmentOverlay();
+  } finally {
+    enrollmentDetectionInFlight = false;
+    if (enrollmentStream) enrollmentDetectionTimer = setTimeout(detectEnrollmentFace, 250);
+  }
+}
+
 async function startEnrollmentCamera() {
   if (enrollmentStream) {
     enrollmentStream.getTracks().forEach(track => track.stop());
     enrollmentStream = null;
+    clearTimeout(enrollmentDetectionTimer);
+    enrollmentDetectionTimer = null;
+    clearEnrollmentOverlay();
     document.getElementById("enrollment-video").srcObject = null;
     document.getElementById("enrollment-placeholder").classList.remove("hidden");
     document.getElementById("capture-dataset-button").disabled = true;
@@ -381,6 +477,7 @@ async function startEnrollmentCamera() {
     document.getElementById("enrollment-placeholder").classList.add("hidden");
     document.getElementById("enrollment-camera-button").textContent = "Stop camera";
     document.getElementById("capture-dataset-button").disabled = !enrollmentUser || enrollmentSamples >= 100;
+    detectEnrollmentFace();
     document.getElementById("capture-status").textContent = enrollmentUser
       ? enrollmentSamples >= 100
         ? "Dataset complete with 100 samples. Select Train Model when ready."
@@ -464,6 +561,12 @@ async function startRecognitionCamera() {
 function stopRecognitionCamera() {
   recognitionStream?.getTracks().forEach(track => track.stop());
   recognitionStream = null;
+  const overlay = document.getElementById("recognition-overlay");
+  if (overlay) {
+    overlay.width = overlay.clientWidth;
+    overlay.height = overlay.clientHeight;
+    overlay.getContext("2d").clearRect(0, 0, overlay.width, overlay.height);
+  }
   document.getElementById("recognition-video").srcObject = null;
   document.getElementById("recognition-placeholder").classList.remove("hidden");
   document.getElementById("recognize-button").disabled = true;
@@ -489,6 +592,11 @@ async function recognizeCurrentFrame() {
         document.getElementById("recognition-canvas")
       ) }),
     });
+    drawRecognitionFaces(
+      data.faces,
+      document.getElementById("recognition-canvas").width,
+      document.getElementById("recognition-canvas").height
+    );
     if (!data.faces.length) {
       result.textContent = "No face detected. Face the camera and try again.";
       return;
@@ -513,8 +621,16 @@ async function trainFaceModel() {
   button.disabled = true;
   button.textContent = "Training…";
   try {
-    const data = await apiFetch("/api/faces/train", { method: "POST", body: "{}" });
-    showToast(`Trained on ${data.data.samples_trained} samples from ${data.data.users_trained} users`, "success");
+    const data = await apiFetch("/api/faces/train", {
+      method: "POST",
+      body: JSON.stringify(enrollmentUser ? { userId: enrollmentUser.id } : {}),
+    });
+    const trainingMessage = data.data.incremental
+      ? data.data.samples_trained > 0
+        ? `Added ${data.data.samples_trained} samples for ${data.data.users_trained} new users`
+        : "The classifier already includes all captured users"
+      : `Trained on ${data.data.samples_trained} samples from ${data.data.users_trained} users`;
+    showToast(trainingMessage, "success");
     await loadFaceStatus();
   } catch (error) {
     showToast(error.message, "error");

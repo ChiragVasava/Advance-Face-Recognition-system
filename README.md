@@ -64,7 +64,7 @@ The Python service follows the existing desktop algorithm: Haar cascade detectio
 The Node API proxies all browser operations to the Python service:
 
 - `POST /api/faces/capture/batch` stores up to ten detected samples per request
-- `POST /api/faces/train` trains from active users' stored samples
+- `POST /api/faces/train` trains a new model once from all active users, then incrementally adds the selected user's captured samples without rereading older users' images
 - `POST /api/faces/recognize` returns identified faces and confidence scores
 - `GET /api/faces/status` reports service, model, sample, and storage status; it restores a missing model from Supabase
 - `GET /api/health` reports backend and database health
