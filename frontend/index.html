@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Recognition System</title>
+  <meta name="description" content="Enterprise face recognition system admin dashboard. Monitor real-time recognition events, manage registered users, and view attendance analytics." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ── Sidebar Navigation ──────────────────────────────────────── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+        <circle cx="12" cy="10" r="3"/>
+        <path d="M6.17 18.24C6.83 15.8 9.26 14 12 14s5.17 1.8 5.83 4.24"/>
+      </svg>
+    </div>
+    <div class="brand-text">
+      <span class="brand-name">Face Recognition</span>
+      <span class="brand-version">OpenCV · LBPH</span>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <button class="nav-item active" id="nav-dashboard" data-section="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" id="nav-users" data-section="users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Users
+    </button>
+    <button class="nav-item" id="nav-logs" data-section="logs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Attendance Logs
+    </button>
+    <button class="nav-item" id="nav-register" data-section="register">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+      Register Face
+    </button>
+    <button class="nav-item" id="nav-system" data-section="system">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>
+      System
+    </button>
+  </nav>
+
+  <div class="sidebar-status" id="ws-status">
+    <div class="status-dot" id="ws-dot"></div>
+    <span id="ws-label">Connecting…</span>
+  </div>
+</aside>
+
+<!-- ── Main Content ────────────────────────────────────────────── -->
+<main class="main">
+
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <h1 class="page-title" id="page-title">Dashboard</h1>
+      <span class="page-subtitle" id="page-subtitle">Real-time system overview</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-time" id="topbar-time">--:--:--</div>
+      <button class="btn btn-ghost" id="train-model-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v3m0 12v3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12M3 12h3m12 0h3M5.64 18.36l2.12-2.12m8.48-8.48 2.12-2.12"/><circle cx="12" cy="12" r="4"/></svg>
+        Train Model
+      </button>
+      <button class="btn btn-primary" id="refresh-button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- ── DASHBOARD SECTION ──────────────────────────────────── -->
+  <section class="section" id="section-dashboard">
+
+    <!-- Stat Cards -->
+    <div class="stats-grid">
+      <div class="stat-card stat-blue">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value" id="stat-total-users">--</span>
+          <span class="stat-label">Registered Users</span>
+        </div>
+      </div>
+      <div class="stat-card stat-green">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value" id="stat-known-today">--</span>
+          <span class="stat-label">Identified Today</span>
+        </div>
+      </div>
+      <div class="stat-card stat-orange">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value" id="stat-unknown-today">--</span>
+          <span class="stat-label">Unknown Today</span>
+        </div>
+      </div>
+      <div class="stat-card stat-purple">
+        <div class="stat-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value" id="stat-total-today">--</span>
+          <span class="stat-label">Total Detections</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Feed + Recent Events -->
+    <div class="two-col">
+      <!-- Browser camera recognition -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recognize Face</span>
+          <span class="live-badge">LBPH</span>
+        </div>
+        <div class="camera-panel">
+          <div class="camera-frame">
+            <video id="recognition-video" class="camera-video" autoplay playsinline muted></video>
+            <canvas id="recognition-canvas" class="hidden"></canvas>
+            <span class="camera-placeholder" id="recognition-placeholder">Camera is off</span>
+          </div>
+          <div class="camera-actions">
+            <button class="btn btn-ghost" id="recognition-camera-button">Start camera</button>
+            <button class="btn btn-primary" id="recognize-button" disabled>Recognize</button>
+          </div>
+          <div class="recognition-result" id="recognition-result" aria-live="polite">Start the camera, then recognize a face.</div>
+        </div>
+      </div>
+
+      <!-- Recent Logs Table -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recent Attendance</span>
+          <button class="btn btn-ghost btn-sm" data-section="logs">View All →</button>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table" id="recent-table">
+            <thead>
+              <tr><th>Name</th><th>Confidence</th><th>Time</th><th>Status</th></tr>
+            </thead>
+            <tbody id="recent-tbody">
+              <tr><td colspan="4" class="empty-row">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── USERS SECTION ──────────────────────────────────────────── -->
+  <section class="section hidden" id="section-users">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Registered Users</span>
+        <div class="card-actions">
+          <input type="search" class="search-input" id="user-search" placeholder="Search users…" />
+          <button class="btn btn-primary btn-sm" data-section="register">+ Register</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table" id="users-table">
+          <thead>
+            <tr><th>#</th><th>Name</th><th>Age</th><th>Department</th><th>Status</th><th>Registered</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="7" class="empty-row">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── LOGS SECTION ───────────────────────────────────────────── -->
+  <section class="section hidden" id="section-logs">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Attendance Log</span>
+        <div class="card-actions">
+          <select class="select-input" id="log-limit">
+            <option value="25">25 rows</option>
+            <option value="50" selected>50 rows</option>
+            <option value="100">100 rows</option>
+          </select>
+          <button class="btn btn-primary btn-sm" id="refresh-logs-button">Refresh</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>#</th><th>Label</th><th>Confidence</th><th>Liveness</th><th>Camera</th><th>Time</th></tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr><td colspan="6" class="empty-row">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination" id="logs-pagination"></div>
+    </div>
+  </section>
+
+  <!-- ── REGISTER SECTION ───────────────────────────────────────── -->
+  <section class="section hidden" id="section-register">
+    <div class="register-grid">
+      <div class="card register-form-card">
+        <div class="card-header">
+          <span class="card-title">Register New Face</span>
+        </div>
+        <form id="register-form">
+          <div class="form-group">
+            <label for="reg-name">Full Name *</label>
+            <input type="text" id="reg-name" class="form-input" placeholder="e.g. Jane Doe" required />
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="reg-age">Age *</label>
+              <input type="number" id="reg-age" class="form-input" placeholder="25" min="1" max="150" required />
+            </div>
+            <div class="form-group">
+              <label for="reg-dept">Department</label>
+              <input type="text" id="reg-dept" class="form-input" placeholder="e.g. Engineering" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="reg-address">Address *</label>
+            <textarea id="reg-address" class="form-input form-textarea" placeholder="123 Main Street, City" required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary btn-lg" id="reg-submit">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+              Register User
+            </button>
+          </div>
+        </form>
+        <div class="form-result hidden" id="reg-result"></div>
+      </div>
+
+      <div class="card register-info-card">
+        <div class="card-header"><span class="card-title">Capture Face Dataset</span></div>
+        <div class="camera-panel">
+          <div class="camera-frame">
+            <video id="enrollment-video" class="camera-video" autoplay playsinline muted></video>
+            <canvas id="enrollment-canvas" class="hidden"></canvas>
+            <span class="camera-placeholder" id="enrollment-placeholder">Camera is off</span>
+          </div>
+          <div class="camera-actions">
+            <button class="btn btn-ghost" id="enrollment-camera-button">Start camera</button>
+            <button class="btn btn-primary" id="capture-dataset-button" disabled>Capture 100 samples</button>
+          </div>
+          <div class="capture-progress" role="progressbar" aria-label="Face dataset capture progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <span id="capture-progress-bar"></span>
+          </div>
+          <div class="camera-status" id="capture-status" aria-live="polite">Register a user, then capture their face samples.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── SYSTEM SECTION ─────────────────────────────────────────── -->
+  <section class="section hidden" id="section-system">
+    <div class="two-col">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Service Health</span></div>
+        <div class="health-list" id="health-list">
+          <div class="health-item">
+            <div>
+              <div class="health-name">Node.js Backend</div>
+              <div class="health-url" id="backend-url-display">http://localhost:4000</div>
+            </div>
+            <div class="health-badge" id="health-backend">Checking…</div>
+          </div>
+          <div class="health-item">
+            <div>
+              <div class="health-name">OpenCV Face Service</div>
+              <div class="health-url">http://localhost:5000</div>
+            </div>
+            <div class="health-badge" id="health-cv">Checking…</div>
+          </div>
+          <div class="health-item">
+            <div>
+              <div class="health-name">PostgreSQL Database</div>
+              <div class="health-url">Via backend proxy</div>
+            </div>
+            <div class="health-badge" id="health-db">Checking…</div>
+          </div>
+          <div class="health-item">
+            <div>
+              <div class="health-name">WebSocket Feed</div>
+              <div class="health-url" id="ws-url-display">ws://localhost:4000/ws</div>
+            </div>
+            <div class="health-badge" id="health-ws">Checking…</div>
+          </div>
+        </div>
+        <button class="btn btn-primary health-check-button" id="check-health-button">Check All Services</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">API Reference</span></div>
+        <div class="api-list">
+          <div class="api-item"><span class="method post">POST</span><code>/api/users</code><span>Register user</span></div>
+          <div class="api-item"><span class="method get">GET</span><code>/api/users</code><span>List all users</span></div>
+          <div class="api-item"><span class="method get">GET</span><code>/api/users/:id</code><span>Get user by ID</span></div>
+          <div class="api-item"><span class="method patch">PATCH</span><code>/api/users/:id</code><span>Update user</span></div>
+          <div class="api-item"><span class="method delete">DELETE</span><code>/api/users/:id</code><span>Deactivate user</span></div>
+          <div class="api-item"><span class="method post">POST</span><code>/api/recognition/event</code><span>Log event</span></div>
+          <div class="api-item"><span class="method get">GET</span><code>/api/recognition/logs</code><span>Attendance logs</span></div>
+          <div class="api-item"><span class="method get">GET</span><code>/api/recognition/stats</code><span>Dashboard stats</span></div>
+          <div class="api-item"><span class="method get">GET</span><code>/api/faces/status</code><span>Model and dataset status</span></div>
+          <div class="api-item"><span class="method post">POST</span><code>/api/faces/capture</code><span>Capture a face sample</span></div>
+          <div class="api-item"><span class="method post">POST</span><code>/api/faces/train</code><span>Train LBPH model</span></div>
+          <div class="api-item"><span class="method post">POST</span><code>/api/faces/recognize</code><span>Recognize face and score</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Toast Notifications ────────────────────────────────────── -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- ── Confirm Modal ──────────────────────────────────────────── -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Confirm</h3>
+    <p id="modal-body">Are you sure?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

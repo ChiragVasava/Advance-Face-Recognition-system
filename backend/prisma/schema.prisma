@@ -1,0 +1,87 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Registered users whose faces are enrolled in the recognition system.
+model User {
+  id        Int      @id @default(autoincrement())
+
+  /// Full name of the registered user.
+  name      String   @db.VarChar(255)
+
+  /// Age of the user at the time of registration.
+  age       Int
+
+  /// Residential or department address.
+  address   String   @db.VarChar(500)
+
+  /// Department / role label (optional, used by admin dashboard).
+  department String? @db.VarChar(100)
+
+  /// Whether this user is currently active in the system.
+  isActive  Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt      @map("updated_at")
+
+  // Relations
+  attendanceLogs AttendanceLog[]
+  faceSamples    FaceSample[]
+
+  @@index([name], map: "idx_user_name")
+  @@map("users")
+}
+
+/// Every recognition event recorded by the system (attendance log).
+model AttendanceLog {
+  id           Int      @id @default(autoincrement())
+
+  /// The user who was recognised (null when recognition returned "Unknown").
+  userId       Int?     @map("user_id")
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Raw classifier confidence score (0-100).
+  confidence   Float
+
+  /// Whether the face passed liveness detection.
+  isLive       Boolean  @default(true) @map("is_live")
+
+  /// Label shown on the video frame ("John Doe (95%)" or "Unknown").
+  label        String   @db.VarChar(255)
+
+  /// Camera / device identifier (e.g. "webcam-0").
+  cameraId     String   @default("webcam-0") @map("camera_id") @db.VarChar(50)
+
+  recognisedAt DateTime @default(now()) @map("recognised_at")
+
+  @@index([userId],       map: "idx_log_user")
+  @@index([recognisedAt], map: "idx_log_time")
+  @@map("attendance_logs")
+}
+
+/// Object-storage references for face images used by the LBPH trainer.
+model FaceSample {
+  id          Int      @id @default(autoincrement())
+  userId      Int      @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storagePath String   @unique @map("storage_path") @db.VarChar(500)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@index([userId], map: "idx_face_sample_user")
+  @@map("face_samples")
+}
+
+/// System-wide configuration key/value store (editable via admin dashboard).
+model SystemConfig {
+  key       String   @id @db.VarChar(100)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
