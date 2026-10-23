@@ -24,14 +24,14 @@ A browser dashboard for registering people, capturing face datasets, training th
 3. In a second terminal opened at the repository root, install Python dependencies and start the recognition service. On Windows:
 
    ```powershell
-   py -3.11 -m pip install -r requirement.txt
+   py -3.11 -m pip install -r requirements.txt
    py -3.11 GUI_Face_Recognition.py
    ```
 
    On macOS or Linux:
 
    ```sh
-   python3 -m pip install -r requirement.txt
+   python3 -m pip install -r requirements.txt
    python3 GUI_Face_Recognition.py
    ```
 
