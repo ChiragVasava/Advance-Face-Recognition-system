@@ -1,74 +1,112 @@
 # Face Recognition Website
 
-A browser dashboard for registering people, capturing face datasets, training the existing OpenCV LBPH recognizer, and displaying recognition results. Node.js serves the website and API, PostgreSQL stores user/event/sample metadata, and `GUI_Face_Recognition.py` runs the Haar + LBPH computer-vision logic.
+A browser dashboard for registering people, capturing training samples, training an OpenCV LBPH model, and recognizing faces with a confidence score.
+
+- Node.js serves the website and REST API.
+- Python (`GUI_Face_Recognition.py`) performs Haar face detection and LBPH training/recognition.
+- PostgreSQL stores users, face-sample metadata, and attendance logs.
+- Captured face photos stay on the machine that enrolled them. Only the trained `classifier.xml` is stored in Supabase Storage when configured.
 
 ## Requirements
 
-- Node.js 20+
-- Python 3.11+
-- PostgreSQL 16+ (local or Supabase)
-- A camera; browser camera access works on `localhost` or HTTPS
+- Node.js 20 or newer
+- Python 3.11
+- A Supabase project or another PostgreSQL database
+- A webcam; browser camera access is allowed on `localhost` or HTTPS
 
-## Run Locally
+You do not need Docker or a separate frontend server.
 
-1. From the repository root, create `backend/.env` from `backend/.env.example`. Set `DATABASE_URL`, `DIRECT_URL`, and `SUPABASE_SERVICE_ROLE_KEY` locally; never commit this file.
-2. Start the Node backend, which also serves the website, and create/update the PostgreSQL tables:
+## First-Time Setup
 
-   ```powershell
-   cd backend
-   npm install
-   npm run db:setup
-   npm run dev
-   ```
+Clone the GitHub repository and open a terminal in its root folder.
 
-3. In a second terminal opened at the repository root, install Python dependencies and start the recognition service. On Windows:
+### 1. Configure the backend environment
 
-   ```powershell
-   py -3.11 -m pip install -r requirements.txt
-   py -3.11 GUI_Face_Recognition.py
-   ```
+Create `backend/.env` from the example file.
 
-   On macOS or Linux:
+PowerShell:
 
-   ```sh
-   python3 -m pip install -r requirements.txt
-   python3 GUI_Face_Recognition.py
-   ```
-
-4. Open `http://localhost:4000` in a browser. No separate frontend server is needed.
-
-Register a user, start the enrollment camera, and capture 100 samples. The browser sends compressed batches of ten frames. Select **Train Model** in the top bar. On the dashboard, start the recognition camera and select **Recognize** to see the predicted identity and LBPH confidence score.
-
-## Shared Classifier Storage
-
-The app keeps captured face photos under `backend/storage/faces` and does not upload them. It stores only the trained `classifier.xml` in the private Supabase Storage bucket so another clone can download the model and recognize people using the same Supabase PostgreSQL users.
-
-Set these in `backend/.env`:
-
-```dotenv
-SUPABASE_URL=https://wilelrwklfnolskcktpk.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=YOUR_SERVER_ONLY_SERVICE_ROLE_KEY
-SUPABASE_BUCKET=face
+```powershell
+Copy-Item backend/.env.example backend/.env
 ```
 
-Keep the service-role key on the backend only; never add it to frontend code or commit it. After configuring it, upload the current local model with `npm --prefix backend run model:upload`. Training uploads the model automatically. On another clone, model status/recognition downloads the classifier from Supabase to the local Python service. Attendance logs, users, and face-sample metadata are in Supabase PostgreSQL; the actual photos remain local.
+macOS/Linux:
 
-## PostgreSQL
+```sh
+cp backend/.env.example backend/.env
+```
 
-The Prisma schema is in `backend/prisma/schema.prisma`. `npx prisma db push` creates or updates the PostgreSQL schema, including users, attendance logs, and face-sample references.
+Edit `backend/.env` locally. Set `DATABASE_URL` and `DIRECT_URL` to your PostgreSQL connection strings. The example uses Supabase's transaction pooler for `DATABASE_URL` and session pooler for `DIRECT_URL`.
 
-## Recognition Details
+Set `SUPABASE_SERVICE_ROLE_KEY` to your project's server-only secret key to share the trained classifier through Supabase Storage. Find it in the Supabase Dashboard under **Project Settings → API Keys**. Do not use the publishable/anon key, put this secret in frontend code, or commit `backend/.env`.
 
-The Python service follows the existing desktop algorithm: Haar cascade detection, equalized grayscale face crops, LBPH training, and a match threshold above 77%. The displayed confidence is the original LBPH distance-derived score, not a calibrated statistical accuracy guarantee.
+If the database password contains reserved URL characters, URL-encode those characters in both connection strings.
 
-The Node API proxies all browser operations to the Python service:
+### 2. Install Node dependencies and initialize PostgreSQL
 
-- `POST /api/faces/capture/batch` stores up to ten detected samples per request
-- `POST /api/faces/train` trains from active users' stored samples
-- `POST /api/faces/recognize` returns identified faces and confidence scores
-- `GET /api/faces/status` reports service, model, sample, and storage status; it restores a missing model from Supabase
-- `GET /api/health` reports backend and database health
+From the repository root:
 
-## Data and Secrets
+```sh
+cd backend
+npm install
+npm run db:setup
+```
 
-Captured images, generated models, local environment files, Python caches, and Node build/dependency directories are excluded by `.gitignore`. Docker and the legacy Tkinter/MySQL/DeepFace paths are not used.
+Run `db:setup` once for a new database or after Prisma schema changes. Stop the backend before running it again; Windows can lock Prisma's generated engine while the server is using it.
+
+### 3. Start the backend and website
+
+In the same `backend` terminal:
+
+```sh
+npm run dev
+```
+
+This starts the Node API and serves the frontend at **http://localhost:4000**. There is no separate frontend command.
+
+### 4. Install and start the Python recognition service
+
+Open a second terminal at the repository root.
+
+Windows:
+
+```powershell
+py -3.11 -m pip install -r requirements.txt
+py -3.11 GUI_Face_Recognition.py
+```
+
+macOS/Linux:
+
+```sh
+python3 -m pip install -r requirements.txt
+python3 GUI_Face_Recognition.py
+```
+
+Keep both terminals running. Open **http://localhost:4000** in your browser.
+
+## Use the Website
+
+1. Open **Register Face**, enter the person's details, then select **Register User**.
+2. Start the enrollment camera and capture 100 samples. Frames are sent in compressed batches of ten.
+3. Select **Train Model**. The LBPH classifier is saved locally and uploaded to Supabase Storage if the service-role key is configured.
+4. On the dashboard, start the recognition camera and select **Recognize**. The result and LBPH confidence score appear on the page and attendance is logged to PostgreSQL.
+
+Check **System** for Node, database, Python service, and classifier status. The health endpoints are `http://localhost:4000/api/health` and `http://localhost:5000/api/cv/health`.
+
+## Shared Classifier and Data
+
+Set `SUPABASE_URL`, `SUPABASE_BUCKET`, and `SUPABASE_SERVICE_ROLE_KEY` in `backend/.env`. The configured bucket is `face` by default. Upload an existing local model once with:
+
+```sh
+npm --prefix backend run model:upload
+```
+
+After that, other clones using the same Supabase database and private bucket can download the classifier automatically when they check model status or recognize a face. Each clone needs its own untracked `backend/.env` with valid database connection strings and the server-only key.
+
+Face photos are not uploaded. They remain under `backend/storage/faces` on the machine that captured them. A clone can recognize using the shared classifier and user records, but retraining there requires that machine to have the training photos. `classifier.xml` is also generated locally and is ignored by Git.
+
+The score shown by LBPH is a distance-derived confidence estimate; it is not a statistically calibrated accuracy guarantee.
+
+## GitHub and Secrets
+
+`.gitignore` excludes `.env` files, captured photos, generated classifiers, dependencies, and build/cache output. Commit the example environment file, never your real `backend/.env` or Supabase service-role key.
